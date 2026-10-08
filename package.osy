@@ -1,0 +1,28 @@
+// Osysharp.Sms — the contract between an app that sends text messages and whatever carries them, and the outbox in between.
+//
+// An app (or a kit — Osysharp.Accounts' one-time codes) calls `SendSms` and moves on: the message is a row in the outbox,
+// written in the same commit as whatever it is about, and delivered after that commit through the app's sender. A sender
+// that is down retries; an app with no sender at all still works — its messages are HELD in the outbox, with the reason,
+// instead of lost.
+//
+// ⚑ SHAPED LIKE Osysharp.Mail, ON PURPOSE. One message shape (`SmsMessage`), a sender interface (`ISmsSender`), an app
+//   setting naming the one to use (`app.Sms = new SmsSetup { … }`), an outbox that delivers after the commit
+//   (`OutgoingSms`). A carrier is an adapter package — `Osysharp.Sms.Elks` for 46elks — so an app changes carrier by
+//   changing one setting, and nothing that sends changes with it.
+//
+// ⚠ AN SMS IS NOT A SECOND FACTOR AN APP CAN REQUIRE. A code by text message proves a phone number *today*; a SIM swap or a
+//   port-out moves the number to somebody else (NIST 800-63B lists it as "restricted"). The Accounts kit uses it to prove a
+//   number, to sign in with a code, and as an OPTIONAL second step — never as the factor an app demands of its admins.
+package Osysharp.Sms {
+  version     "0.3.1";
+  minPlatform "0.9.0";
+  summary     "text messages an app sends — one message shape, a pluggable sender, an outbox that delivers after the commit and holds messages when there is no sender.";
+  model "model/*.osy";
+  // The personal data its own fields hold (`[Classification(Personal.X)]`): an app maps a level onto its own
+  // classification, or leaves it to each row's own security.
+  personal Contact;
+  personal Content;
+  use Osysharp.Identity@0;
+  use Osysharp.Workflow;
+  tests "tests";
+}

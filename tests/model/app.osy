@@ -1,0 +1,60 @@
+namespace SmsKitTests;
+
+using Osysharp.Identity;
+using Osysharp.Sms;
+
+[Role] enum AppRole { Authenticator, Agent, Customer }
+
+policy IsAgent => RoleGrant.Any(g => g.Member == user && g.Role == AppRole.Agent);
+
+/// Somebody who signs in — the contract's base is enough for a text-message test.
+entity Person : Principal {
+  security {
+    allow read when IsAuthenticated || IsAuthenticator;
+    allow create when IsAuthenticator;
+    allow update when IsAuthenticated || IsAuthenticator where Id == user.Id;
+    allow update when IsAuthenticator;
+  }
+}
+
+// The app decides who of its people may send: its agents, and they read the outbox.
+partial entity OutgoingSms { security { allow create, read when IsAgent; allow delete when IsAgent; } }
+
+/// What a carrier received — one row per message the sender was handed.
+entity Carried {
+  [Required, MaxLength(20)] string To;
+  [MaxLength(20)] string From = "";
+  [Required, MaxLength(1600)] string Text;
+  [MaxLength(200)] string Key = "";
+  security { allow read when IsAuthenticated; }
+}
+
+/// A switch the tests flip: the sender's credentials are missing, or its carrier is down.
+entity SenderState {
+  bool Unconfigured = false;
+  bool Down = false;
+  security { allow read, create when IsAuthenticated || IsAuthenticator; }
+}
+
+/// A sender that records instead of sending — it does not declare `NotReadyReason`, so a held message carries the
+/// contract's default sentence.
+public class RecordingSmsSender : ISmsSender {
+  public string Key { get; } = "recording";
+  public bool IsReady() { return !SenderState.Any(s => s.Unconfigured); }
+  public string SendSms(SmsMessage message, string idempotencyKey) {
+    if (SenderState.Any(s => s.Down)) { throw new ExternalServiceException("The carrier is down."); }
+    new Carried { To = message.To, From = message.From, Text = message.Text, Key = idempotencyKey };
+    return "carried-" + message.To;
+  }
+}
+
+/// An agent texting a customer.
+OutgoingSms Text(string to, string text, string? key = null) {
+  return SendSms(new SmsMessage { To = to, Text = text }, key);
+}
+
+OutgoingSms TextFrom(string to, string from, string text) {
+  return SendSms(new SmsMessage { To = to, From = from, Text = text });
+}
+
+string Normal(string number) { return NormalisedPhone(number); }

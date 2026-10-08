@@ -1,0 +1,64 @@
+namespace Osysharp.Sms;
+
+// ── the message ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// One text message.
+public class SmsMessage {
+  /// Who it comes from: an E.164 number the app owns, or an alphanumeric sender name ("Acme"). Empty: the app's
+  /// `app.Sms.From`.
+  ///
+  /// ⚠ A NAME CANNOT BE REPLIED TO. Right for a one-time code or a notice; use a number for anything conversational.
+  public string From = "";
+  /// The recipient in E.164 — `+46701234567`. A local form (`0701234567`) is refused where it is written, because a
+  /// carrier's refusal of it arrives later and names a parameter rather than the missing country code.
+  public string To = "";
+  public string Text = "";
+}
+
+// ── the sender ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+/// Something that carries text messages. Implement it for a provider and name an instance in `app.Sms`:
+/// `app.Sms = new SmsSetup { Sender = new ElksSmsSender { Username = …, Password = … }, From = "Acme" };`
+public interface ISmsSender {
+  /// Short and stable — "46elks", "twilio". Recorded on each message it sent.
+  string Key { get; }
+  /// Whether it can send right now — its credentials are set. A sender that is not ready leaves messages HELD.
+  bool IsReady();
+  /// Send one message. Answer the carrier's own id for it (what its support asks for). `idempotencyKey` is stable per
+  /// message: a retried delivery must send once where the carrier supports it. Throw `ExternalServiceException` on
+  /// failure — the outbox retries.
+  string SendSms(SmsMessage message, string idempotencyKey);
+  /// Why it is not ready, in a sentence the person reading the outbox can act on — written on each message it leaves HELD.
+  /// A default: a sender that knows WHICH setting is missing should say so.
+  string NotReadyReason() => $"The text-message sender '{Key}' is not ready — its credentials are not set.";
+}
+
+/// How the app's text messages go out — `app.Sms = new SmsSetup { … }`.
+[AppSetting("Sms")]
+public class SmsSetup {
+  /// What carries them. None: every message is HELD in the outbox — the app works, and nothing is sent.
+  public ISmsSender? Sender = null;
+  /// The default sender for a message that names none — a number the app owns, or a name of up to eleven letters and
+  /// digits ("Acme").
+  public string From = "";
+}
+
+/// Is `number` an E.164 phone number — a `+`, a country code, and 7 to 15 digits in all?
+public bool IsPhoneNumber(string number) {
+  if (!number.StartsWith("+")) { return false; }
+  var digits = number.Substring(1);
+  if (digits.Length < 7 || digits.Length > 15) { return false; }
+  for (var i = 0; i < digits.Length; i++) {
+    var c = digits.Substring(i, 1);
+    if ("0123456789".IndexOf(c) < 0) { return false; }
+  }
+  return !digits.StartsWith("0");
+}
+
+/// A phone number as typed — spaces, dashes, dots and brackets dropped, a leading `00` read as `+` — or "" when what is
+/// left is not E.164. The one spelling every comparison uses, so `+46 70-123 45 67` and `+46701234567` are one number.
+public string NormalisedPhone(string number) {
+  var kept = number.Trim().Replace(" ", "").Replace("-", "").Replace(".", "").Replace("(", "").Replace(")", "");
+  if (kept.StartsWith("00")) { kept = "+" + kept.Substring(2); }
+  return IsPhoneNumber(kept) ? kept : "";
+}

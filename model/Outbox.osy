@@ -1,0 +1,112 @@
+namespace Osysharp.Sms;
+
+using Osysharp.Identity;
+using Osysharp.Workflow;
+
+// ⚠ Appended, never inserted: an enum is stored by position.
+public enum SmsStatus {
+  [Label("Waiting")] Queued,
+  [Label("Sent")] Sent,
+  [Label("Not sent — no text-message sender")] Held,
+}
+
+/// A text message the app sent — written in the caller's commit, delivered after it (`OutgoingSmsDelivery`). It is the
+/// delivery record too: when it went, through what, and the carrier's id for it.
+///
+/// ⚑ THE APP DECIDES WHO SENDS, so this is `Extensible`: the package grants the one sender it knows — the sign-in flow,
+///   which texts one-time codes — and an app grants its own people:
+///     `partial entity OutgoingSms { security { allow create, read when IsAgent; } }`
+///   Nothing else can put a row here, so nobody can use the app to text anybody they like at its expense.
+[Authority(Extensible)]
+public entity OutgoingSms {
+  /// The recipient, in E.164.
+  [Required, Classification(Personal.Contact), MaxLength(20)] string To;
+  /// The sender; null is `app.Sms.From` at the time it is sent.
+  [MaxLength(20)] string? From;
+  [Required, Classification(Personal.Content), MaxLength(1600)] string Text;
+  /// A key the caller gave: the same key twice is one message, not two.
+  [Unique, MaxLength(200)] string? IdempotencyKey;
+  SmsStatus Status;                                    // no default — OutgoingSmsDelivery owns it
+  DateTime? SentAt;
+  /// The sender it went through (`ISmsSender.Key`) and the carrier's id for it.
+  [MaxLength(40)] string? SentWith;
+  [MaxLength(120)] string? ProviderId;
+  /// Why it was held, or why the last attempt failed.
+  [MaxLength(500)] string? Problem;
+  security {
+    // SECURITY-INVARIANT(sms-outbox-is-not-the-phone): the sign-in flow reads what it sent, and nobody else reads the
+    // outbox unless the app grants it — NOT EVEN THE RECIPIENT. A one-time code sits in these rows, and a signed-in person
+    // who could read the message addressed to their number could take the code without the phone, which is the one thing
+    // texting it exists to prove. Guarded by tests/sms.test.osy
+    // (a_recipient_cannot_read_their_code_out_of_the_outbox).
+    allow read when IsAuthenticator;
+    allow create when IsAuthenticator;
+  }
+}
+
+/// Delivers each message after the commit that wrote it — the shape of `OutgoingMailDelivery`, for the same reason: a
+/// message is written inside somebody's commit, and the carrier must not be called inside it. `enter` decides what it can
+/// at once (is there a ready sender); the send runs when the clock fires, after the commit, and a throw there leaves the
+/// message Queued to be retried.
+public workflow OutgoingSmsDelivery {
+  Tracks    = OutgoingSms.Status;
+  Autostart = true;
+  Initial   = Queued;
+
+  state Queued {
+    enter {
+      var sender = App.Setting<SmsSetup>().Sender;
+      if (sender == null || !sender.IsReady()) {
+        this.Item.Problem = sender == null
+          ? "No text-message sender is set up — name one in app.Sms (`Sender = new ElksSmsSender { … }`)."
+          : sender.NotReadyReason();
+        goto Held;
+      }
+    }
+    Expire { Within = TimeSpan.Zero; Accrues = false; }
+    on Expire {
+      var setup = App.Setting<SmsSetup>();
+      var sender = setup.Sender!;
+      this.Item.ProviderId = sender.SendSms(new SmsMessage { From = this.Item.From ?? setup.From, To = this.Item.To,
+                                                             Text = this.Item.Text },
+                                            "sms-" + this.Item.Id.ToString());
+      this.Item.SentWith = sender.Key;
+      this.Item.SentAt = DateTime.UtcNow;
+      this.Item.Problem = null;
+      goto Sent;
+    }
+  }
+
+  terminal success Sent { }
+  terminal cancel Held { }
+}
+
+/// Put a text message in the outbox. It goes once the caller's commit does — never before, so a message about something
+/// that was rolled back is never sent. Answers the outbox row.
+///
+/// `idempotencyKey`: the same key twice is ONE message — a handler that runs twice does not text twice. Derive it from
+/// what the message is about ("code-<account>-<request>"), never from the time.
+public OutgoingSms SendSms(SmsMessage message, string? idempotencyKey = null) {
+  if (idempotencyKey != null) {
+    var already = OutgoingSms.FirstOrDefault(m => m.IdempotencyKey == idempotencyKey);
+    if (already != null) { return already; }
+  }
+  var to = NormalisedPhone(message.To);
+  if (to == "") {
+    throw new ValidationException($"'{message.To}' is not a phone number a text can go to — write it with a `+` and its country code (`+46701234567`, not `0701234567`).");
+  }
+  if (message.Text.Trim() == "") { throw new ValidationException("This text message has no text: set `Text`."); }
+  var from = message.From != "" ? message.From : App.Setting<SmsSetup>().From;
+  return new OutgoingSms { To = to, From = from == "" ? null : from, Text = message.Text, IdempotencyKey = idempotencyKey };
+}
+
+/// Forget what the outbox holds of texts to `number` — a person exercising their right to erasure: every text to it is
+/// deleted. Runs as whatever erases (a workflow, as the system); the app decides who may ask.
+public int EraseSmsTo(string number) {
+  var n = NormalisedPhone(number);
+  if (n == "") { return 0; }
+  var reached = 0;
+  foreach (var m in OutgoingSms.Where(m => m.To == n).ToList()) { m.Delete(); reached = reached + 1; }
+  return reached;
+}
+

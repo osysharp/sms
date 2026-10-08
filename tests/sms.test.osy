@@ -1,0 +1,132 @@
+// Osysharp.Sms — every test asserts what the CARRIER received (the `Carried` rows the recording sender writes), or what
+// the outbox says happened, never merely that a call returned. No test sends a real text message.
+
+using Osysharp.Identity;
+using Osysharp.Sms;
+using SmsKitTests;
+
+[TestFixture]
+void Desk() {
+  var ada = new Person { Email = "ada@acme.test", DisplayName = "Ada" };
+  new RoleGrant { Member = ada, Role = AppRole.Agent };
+  new Person { Email = "cus@example.test", DisplayName = "Cus" };
+}
+
+principal Ada => Person.Single(p => p.Email == "ada@acme.test");
+principal Cus => Person.Single(p => p.Email == "cus@example.test");
+
+[Test(Desk)]
+void a_message_goes_after_the_commit_and_is_recorded_as_sent() {
+  runas (Ada) {
+    var sms = Text("+46701234567", "Your table is ready.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var sent = OutgoingSms.Single(m => m.Text == "Your table is ready.");
+    Assert.Equal(SmsStatus.Sent, sent.Status);
+    Assert.Equal("recording", sent.SentWith);
+    Assert.Equal("carried-+46701234567", sent.ProviderId);
+    var carried = Carried.Single(c => c.Text == "Your table is ready.");
+    Assert.Equal("+46701234567", carried.To);
+    // No sender on the message: the app's default.
+    Assert.Equal("Acme", carried.From);
+  }
+}
+
+[Test(Desk)]
+void a_number_is_normalised_before_it_is_written() {
+  runas (Ada) {
+    var sms = Text("+46 70-123 45 67", "Spaced.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) { Assert.Equal("+46701234567", Carried.Single(c => c.Text == "Spaced.").To); }
+  Assert.Equal("+46701234567", Normal("0046 70 123 45 67"));
+  Assert.Equal("", Normal("0701234567"));
+}
+
+[Test(Desk)]
+void a_local_number_is_refused_where_it_was_written() {
+  runas (Ada) { Assert.Throws(() => Text("0701234567", "No country code.")); }
+}
+
+[Test(Desk)]
+void the_messages_own_sender_overrides_the_apps() {
+  runas (Ada) {
+    var sms = TextFrom("+46701234567", "+46700000000", "From our number.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) { Assert.Equal("+46700000000", Carried.Single(c => c.Text == "From our number.").From); }
+}
+
+[Test(Desk)]
+void the_same_key_twice_is_one_message() {
+  runas (Ada) {
+    Text("+46701234567", "Reminder.", "reminder-1");
+    UnitOfWork.Commit();
+    Text("+46701234567", "Reminder.", "reminder-1");
+    UnitOfWork.Commit();
+  }
+  runas (Ada) { Assert.Equal(1, OutgoingSms.Count(m => m.Text == "Reminder.")); }
+}
+
+[Test(Desk)]
+void with_no_ready_sender_the_message_is_held_and_says_why() {
+  runas (Ada) { new SenderState { Unconfigured = true }; }
+  runas (Ada) {
+    var sms = Text("+46701234567", "Held one.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var held = OutgoingSms.Single(m => m.Text == "Held one.");
+    Assert.Equal(SmsStatus.Held, held.Status);
+    // `RecordingSmsSender` declares no `NotReadyReason`, so this is the CONTRACT's default body.
+    Assert.Equal("The text-message sender 'recording' is not ready — its credentials are not set.", held.Problem);
+    Assert.False(Carried.Any(c => c.Text == "Held one."));
+  }
+}
+
+[Test(Desk)]
+void a_carrier_that_is_down_leaves_the_message_waiting_to_be_retried() {
+  runas (Ada) { new SenderState { Down = true }; }
+  runas (Ada) {
+    var sms = Text("+46701234567", "Retry me.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) { Assert.Equal(SmsStatus.Queued, OutgoingSms.Single(m => m.Text == "Retry me.").Status); }
+}
+
+[Test(Desk)]
+void nobody_the_app_did_not_name_can_text_in_its_name() {
+  runas (Cus) { Assert.Denied(() => Text("+46709999999", "Spam.")); }
+}
+
+[Test(Desk)]
+void a_recipient_cannot_read_their_code_out_of_the_outbox() {
+  runas (Ada) { Text("+46701234567", "Your code is 123456."); }
+  // The agent the app granted reads it…
+  runas (Ada) { Assert.True(OutgoingSms.Any(m => m.Text == "Your code is 123456.")); }
+  // …and a customer does not: a code read out of the outbox proves nothing about the phone.
+  runas (Cus) { Assert.False(OutgoingSms.Any(m => m.Text == "Your code is 123456.")); }
+}
+
+[Test(Desk)]
+void erasing_a_number_forgets_every_text_sent_to_it() {
+  runas (Ada) {
+    Text("+46701234567", "Your table is ready.");
+    Text("+46 70-123 45 67", "Your bill.");
+    Text("+46709999999", "Somebody else.");
+    UnitOfWork.Commit();
+    Assert.Equal(2, EraseSmsTo("+46 70 123 45 67"));
+    UnitOfWork.Commit();
+  }
+  runas (Ada) {
+    Assert.Equal(0, OutgoingSms.Count(m => m.To == "+46701234567"));
+    Assert.Equal(1, OutgoingSms.Count(m => m.To == "+46709999999"));
+  }
+}
+

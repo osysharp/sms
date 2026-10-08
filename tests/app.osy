@@ -1,0 +1,10 @@
+// The producer's test project for Osysharp.Sms — an app with a sender of its own that records what it was handed, so the
+// tests can assert what a carrier actually received. No test ever sends a real text message.
+app SmsKitTests {
+  model "model/**/*.osy";
+  tests "**/*.test.osy";
+  use Osysharp.Identity@0;
+  use Osysharp.Sms@0;
+  use Osysharp.Workflow;
+}
+
