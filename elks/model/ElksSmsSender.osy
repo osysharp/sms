@@ -1,0 +1,50 @@
+namespace Osysharp.Sms.Elks;
+
+using Osysharp.Sms;
+using Osysharp.Elks;
+
+/// 46elks, as the app's text-message sender:
+///
+///   app.Sms = new SmsSetup {
+///     Sender = new ElksSmsSender {
+///       Username = Security.IsSecretSet("ElksUsername") ? Secret.ElksUsername : "",
+///       Password = Security.IsSecretSet("ElksPassword") ? Secret.ElksPassword : "",
+///     },
+///     From = "Acme",
+///   };
+///
+/// With no credentials it is not READY, and the outbox holds messages rather than failing them — so an app runs, and its
+/// sign-in codes wait in the outbox where they can be read, before anybody has an account with 46elks.
+///
+/// ⛔ THE CREDENTIALS ARE SETTINGS, NOT SECRETS THIS PACKAGE NAMES: the app names its own secrets, and this package never
+///    learns which — the rule `ElksClient` and `ResendSender` follow.
+public class ElksSmsSender : ISmsSender {
+  public string Key { get; } = "46elks";
+  /// The API username from the 46elks dashboard (`u…`) — not the dashboard login.
+  public string Username = "";
+  public string Password = "";
+  /// Validate and price every message WITHOUT sending it — for a staging app that must not text real people.
+  public bool DryRun = false;
+  /// 46elks' API root, unless you are pointed at a mock that speaks the same wire.
+  public string BaseUrl = "https://api.46elks.com";
+
+  public bool IsReady() { return Username != "" && Password != ""; }
+
+  /// Says WHICH credential is missing — the contract's default names only the sender.
+  public string NotReadyReason() {
+    if (Username == "" && Password == "") { return "46elks has no API username or password — set both on ElksSmsSender in app.Sms."; }
+    return Username == "" ? "46elks has no API username — set `Username` on ElksSmsSender in app.Sms."
+                          : "46elks has no API password — set `Password` on ElksSmsSender in app.Sms.";
+  }
+
+  /// One message through 46elks. Answers 46elks' id for it — the key a delivery report arrives under.
+  ///
+  /// ⚠ 46elks TAKES NO IDEMPOTENCY KEY, so `idempotencyKey` is not sent: a delivery whose answer was lost in transit and
+  ///   is retried can text twice. The outbox sends each row once when the carrier answers; the gap is only the lost answer.
+  public string SendSms(Osysharp.Sms.SmsMessage message, string idempotencyKey) {
+    var sent = new ElksClient { Username = Username, Password = Password, BaseUrl = BaseUrl }.Send(new Osysharp.Elks.SmsMessage {
+      From = message.From, To = message.To, Message = message.Text, DryRun = DryRun,
+    });
+    return sent.SmsId ?? "";
+  }
+}

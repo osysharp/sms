@@ -1,0 +1,57 @@
+// Osysharp.Sms.Elks — a message through the outbox, asserted on what reached 46elks' API. Every test stubs `Http.Post`:
+// nothing leaves the process and no text message is ever sent.
+
+using Osysharp.Http;
+using Osysharp.Identity;
+using Osysharp.Sms;
+
+[TestFixture]
+void Desk() {
+  var ada = new Person { Email = "ada@acme.test" };
+  new RoleGrant { Member = ada, Role = AppRole.Agent };
+  Http.Post.Stub((url, body, headers) => {
+    new WireLog { Url = url, Body = body, Auth = headers["Authorization"] };
+    return new HttpResponse { StatusCode = 200, Body = "{\"id\":\"s-elks-1\",\"status\":\"created\",\"parts\":1}" };
+  });
+}
+
+principal Ada => Person.Single(p => p.Email == "ada@acme.test");
+
+[Test(Desk)]
+void a_message_reaches_46elks_as_a_form_and_answers_its_id() {
+  runas (Ada) {
+    var sms = Text("+46701234567", "Your code is 123456.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var sent = OutgoingSms.Single(m => m.Text == "Your code is 123456.");
+    Assert.Equal(SmsStatus.Sent, sent.Status);
+    Assert.Equal("46elks", sent.SentWith);
+    Assert.Equal("s-elks-1", sent.ProviderId);
+    var wire = WireLog.Single(w => w.Body.Contains("123456"));
+    Assert.Equal("https://api.46elks.com/a1/SMS", wire.Url);
+    // The `+` is escaped: a bare `+` in a form body is a space, and 46elks would read no country code.
+    Assert.Contains("to=%2B46701234567", wire.Body);
+    Assert.Contains("from=Acme", wire.Body);
+    Assert.Contains("message=Your%20code%20is%20123456.", wire.Body);
+    Assert.Equal("Basic " + Convert.ToBase64String(Text.ToBytes("u_test:p_test")), wire.Auth);
+  }
+}
+
+[Test(Desk)]
+void with_no_password_the_message_is_held_and_says_which_credential() {
+  ElksPassword.Stub(() => "");
+  runas (Ada) {
+    var sms = Text("+46701234567", "Held.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var held = OutgoingSms.Single(m => m.Text == "Held.");
+    Assert.Equal(SmsStatus.Held, held.Status);
+    // The adapter's own NotReadyReason, not the contract's default.
+    Assert.Equal("46elks has no API password — set `Password` on ElksSmsSender in app.Sms.", held.Problem);
+    Assert.False(WireLog.Any(w => w.Body.Contains("Held.")));
+  }
+}

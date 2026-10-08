@@ -1,0 +1,84 @@
+{
+  "platform": {
+    "version": "0.9.0"
+  },
+  "entries": [
+    {
+      "name": "Osysharp.Elks",
+      "kind": "package",
+      "version": "0.1.0",
+      "hash": "sha256:74ae14e16db1ad4ed141a98efc7e71fa9fabc4a2690a3838a337b5f07e97cdcb",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:kits/elks",
+      "constraint": "0"
+    },
+    {
+      "name": "Osysharp.Http",
+      "kind": "package",
+      "version": "1.0.0",
+      "hash": "sha256:4c24068aeea5ef1a155459d4cc332c85d7ee3d96049f2404e54ac860d94beb0f",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:Platform.Core/Dsl/OsySharp/Baseline/Capabilities/Http"
+    },
+    {
+      "name": "Osysharp.Identity",
+      "kind": "package",
+      "version": "0.7.0",
+      "hash": "sha256:a8f780ee024fb27a6c1f909feb86fec10c8a176788acd8546d1380a9243575bd",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:kits/identity",
+      "constraint": "0"
+    },
+    {
+      "name": "Osysharp.Sms",
+      "kind": "package",
+      "version": "0.3.1",
+      "hash": "sha256:f44d20de9952a7e05285c347b3480e8c44f2b158883d562a345fddc9399b36e4",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:kits/sms",
+      "constraint": "0"
+    },
+    {
+      "name": "Osysharp.Workflow",
+      "kind": "package",
+      "version": "1.0.0",
+      "hash": "sha256:c9b5bb60a8be44efc0030d73b0bd60bdab05926344a68fb4db29dc78ee94c2f8",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:Platform.Core/Dsl/OsySharp/Baseline/Capabilities/Workflow"
+    },
+    {
+      "name": "Osysharp.Sms.Elks",
+      "kind": "package",
+      "version": "0.1.1",
+      "hash": "sha256:c89e965d5335b5457a4f30e7247979a1f240868b454b502af7d20b6cf5fd9f6d",
+      "minPlatform": "0.9.0",
+      "shadow": "app-forkable",
+      "source": "workspace:kits/sms-elks",
+      "constraint": "0"
+    }
+  ],
+  "bridges": {
+    "searched": [
+      "workspace",
+      "platform"
+    ],
+    "skipped": [
+      "github: offline \u2014 the public catalog was not searched for bridges. Run \u0060osy lock\u0060 with a network to look."
+    ],
+    "notIncluded": [
+      {
+        "name": "Osysharp.Conversations.Sms",
+        "reason": "completes Osysharp.Conversations \u002B Osysharp.Sms, and this app does not use \u0060Osysharp.Conversations\u0060."
+      },
+      {
+        "name": "Osysharp.Privacy.Sms",
+        "reason": "completes Osysharp.Privacy \u002B Osysharp.Sms, and this app does not use \u0060Osysharp.Privacy\u0060."
+      }
+    ]
+  }
+}
