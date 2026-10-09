@@ -19,6 +19,7 @@ public enum SmsStatus {
 ///   Nothing else can put a row here, so nobody can use the app to text anybody they like at its expense.
 [Authority(Extensible)]
 public entity OutgoingSms {
+  [CreatedAt] DateTime? CreatedAt;
   /// The recipient, in E.164.
   [Required, Classification(Personal.Contact), MaxLength(20)] string To;
   /// The sender; null is `app.Sms.From` at the time it is sent.
