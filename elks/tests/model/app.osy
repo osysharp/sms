@@ -19,7 +19,7 @@ partial entity OutgoingSms { security { allow create, read when IsAgent; } }
 
 /// The tests' 46elks password — the switch the held-message test flips, by stubbing it to nothing. In a real app the two
 /// are `Secret.ElksUsername` / `Secret.ElksPassword`; literals here, because every test stubs the HTTP call. A function the
-/// test stubs, so the setup below is configuration and reads no data (D-SETTINGCACHE1).
+/// test stubs, so the setup below is configuration and reads no data.
 string ElksPassword() { return "p_test"; }
 
 app.Sms = new SmsSetup {
