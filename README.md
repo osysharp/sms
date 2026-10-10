@@ -15,7 +15,7 @@ SendSms(new SmsMessage { To = booking.Customer.Mobile, Text = $"See you at {book
 // app.osy
 use Osysharp.Identity@0;
 use Osysharp.Sms@0;
-use Osysharp.Sms.Elks@0 { egress "api.46elks.com"; }   // the carrier — or your own ISmsSender
+use Osysharp.Sms.FortySixElks@0 { egress "api.46elks.com"; }   // the carrier — or your own ISmsSender
 use Osysharp.Workflow;
 ```
 
@@ -50,7 +50,7 @@ app.Sms = new SmsSetup {
 A sender is anything implementing `ISmsSender` — `Key`, `IsReady()`, `SendSms(message, idempotencyKey)`, and optionally
 `NotReadyReason()` — so the app changes carrier by changing one setting.
 
-- **[Osysharp.Sms.Elks](https://osyrin.com/templates/kits/sms-elks/)** — 46elks: Nordic alphanumeric senders, EU-only handling, a dry run.
+- **[Osysharp.Sms.FortySixElks](https://osyrin.com/templates/kits/sms-forty-six-elks/)** — 46elks: Nordic alphanumeric senders, EU-only handling, a dry run.
 - **Your own** — a class implementing `ISmsSender` over `Http.*` for any provider, with its host declared in your
   package's manifest.
 
@@ -59,7 +59,7 @@ A sender is anything implementing `ISmsSender` — `Key`, `IsReady()`, `SendSms(
 ## What it is not
 
 ⚠ **An SMS is not a second factor an app can require.** A code by text proves a number *today*; a SIM swap or a port-out
-moves the number to somebody else (NIST 800-63B lists SMS as "restricted"). The Accounts kit uses it to prove a number,
+moves the number to somebody else (NIST 800-63B lists SMS as "restricted"). The UserAccounts kit uses it to prove a number,
 to sign in with a code, and as an optional second step an account may choose — never as the factor an app demands of its
 admins.
 
