@@ -1,0 +1,40 @@
+using Osysharp.Identity;
+using Osysharp.Sms;
+using Osysharp.Sms.FortySixElks;
+
+[Role] enum AppRole { Authenticator, Agent }
+
+policy IsAgent => RoleGrant.Any(g => g.Member == user && g.Role == AppRole.Agent);
+
+entity Person : Principal {
+  security {
+    allow read when IsAuthenticated || IsAuthenticator;
+    allow create when IsAuthenticator;
+    allow update when IsAuthenticated || IsAuthenticator where Id == user.Id;
+    allow update when IsAuthenticator;
+  }
+}
+
+partial entity OutgoingSms { security { allow create, read when IsAgent; } }
+
+/// The tests' 46elks password — the switch the held-message test flips, by stubbing it to nothing. In a real app the two
+/// are `Secret.ElksUsername` / `Secret.ElksPassword`; literals here, because every test stubs the HTTP call. A function the
+/// test stubs, so the setup below is configuration and reads no data.
+string ElksPassword() { return "p_test"; }
+
+app.Sms = new SmsSetup {
+  Sender = new ElksSmsSender { Username = "u_test", Password = ElksPassword() },
+  From = "Acme",
+};
+
+OutgoingSms Text(string to, string text) {
+  return SendSms(new SmsMessage { To = to, Text = text });
+}
+
+/// What reached the wire — one row per HTTP post the stub answered.
+entity WireLog {
+  [Required, MaxLength(300)] string Url;
+  [Required] string Body;
+  [MaxLength(300)] string Auth = "";
+  security { allow read, create when IsAuthenticated || IsAnonymous; }
+}

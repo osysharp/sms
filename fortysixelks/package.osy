@@ -1,0 +1,18 @@
+// Osysharp.Sms.FortySixElks — 46elks as an `Osysharp.Sms` sender.
+//
+// ⚑ WHY THIS IS A PACKAGE OF ITS OWN, and not a class inside Osysharp.FortySixElks: the text-message contract is people-aware (its
+//   outbox is guarded by `Osysharp.Identity`), and an app has ONE `[Principal]`. Had Osysharp.FortySixElks itself taken the
+//   contract, every app already texting through Elks with an account model of its own would have been handed a second
+//   principal and refused. Elks' own API is untouched; this is the few lines that adapt it — the shape
+//   `Osysharp.Mail.Resend` has for mail.
+package Osysharp.Sms.FortySixElks {
+  version "0.1.3";
+  minPlatform "0.9.0";
+  summary     "46elks as a sender for Osysharp.Sms — Nordic alphanumeric senders, EU-only handling, and a dry run for staging.";
+  model "model/*.osy";
+  use Osysharp.Sms@0;
+  use Osysharp.FortySixElks@0 { egress "api.46elks.com"; }
+  use Osysharp.Http;
+  egress "api.46elks.com";
+  tests "tests";
+}

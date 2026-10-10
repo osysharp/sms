@@ -1,0 +1,13 @@
+// The producer's test project for Osysharp.Sms.FortySixElks — a message through the outbox, asserted on the form body that
+// reaches 46elks' API (every test stubs `Http.Post`, so nothing leaves the process and no text is ever sent).
+app SmsElksKitTests {
+  model "model/**/*.osy";
+  tests "**/*.test.osy";
+  use Osysharp.Identity@0;
+  use Osysharp.Sms@0;
+  use Osysharp.Sms.FortySixElks@0 { egress "api.46elks.com"; }
+  use Osysharp.FortySixElks@0 { egress "api.46elks.com"; }
+  use Osysharp.Workflow;
+  use Osysharp.Http;
+}
+
