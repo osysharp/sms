@@ -14,8 +14,8 @@
 //   port-out moves the number to somebody else (NIST 800-63B lists it as "restricted"). The UserAccounts kit uses it to prove a
 //   number, to sign in with a code, and as an OPTIONAL second step — never as the factor an app demands of its admins.
 package Osysharp.Sms {
-  version     "0.4.1";
-  minPlatform "0.9.0";
+  version     "0.5.0";
+  minPlatform "0.14.0";
   summary     "text messages an app sends — one message shape, a pluggable sender, an outbox that delivers after the commit and holds messages when there is no sender.";
   model "model/*.osy";
   // The personal data its own fields hold (`[Classification(Personal.X)]`): an app maps a level onto its own
