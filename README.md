@@ -66,3 +66,78 @@ admins.
 ## Its tests
 
 Its tests are in `tests/` — every one asserts what a recording sender received; none sends a real message.
+
+## Examples
+
+Taken from this package's own tests, which compile and run on every release.
+
+```osy
+using Osysharp.Identity;
+using Osysharp.Sms;
+using SmsKitTests;
+
+[Test(Desk)]
+void a_message_goes_after_the_commit_and_is_recorded_as_sent() {
+  runas (Ada) {
+    var sms = Text("+46701234567", "Your table is ready.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var sent = OutgoingSms.Single(m => m.Text == "Your table is ready.");
+    Assert.Equal(SmsStatus.Sent, sent.Status);
+    Assert.Equal("recording", sent.SentWith);
+    Assert.Equal("carried-+46701234567", sent.ProviderId);
+    var carried = Carried.Single(c => c.Text == "Your table is ready.");
+    Assert.Equal("+46701234567", carried.To);
+    // No sender on the message: the app's default.
+    Assert.Equal("Acme", carried.From);
+  }
+}
+```
+
+From [`tests/sms.test.osy`](tests/sms.test.osy).
+
+```osy
+using Osysharp.Identity;
+using Osysharp.Sms;
+using SmsKitTests;
+
+[Test(Desk)]
+void a_number_is_normalised_before_it_is_written() {
+  runas (Ada) {
+    var sms = Text("+46 70-123 45 67", "Spaced.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) { Assert.Equal("+46701234567", Carried.Single(c => c.Text == "Spaced.").To); }
+  Assert.Equal("+46701234567", Normal("0046 70 123 45 67"));
+  Assert.Equal("", Normal("0701234567"));
+}
+```
+
+From [`tests/sms.test.osy`](tests/sms.test.osy).
+
+```osy
+using Osysharp.Identity;
+using Osysharp.Sms;
+using SmsKitTests;
+
+[Test(Desk)]
+void a_local_number_is_refused_where_it_was_written() {
+  runas (Ada) { Assert.Throws(() => Text("0701234567", "No country code.")); }
+}
+```
+
+From [`tests/sms.test.osy`](tests/sms.test.osy).
+
+## Learn more
+
+- [The Osysharp.Sms reference](https://osysharp.com/reference/ui/sms-kit/)
+- [Osysharp.Sms in the package catalogue](https://osysharp.com/packages/#osysharp-sms)
+- [The Osy# reference](https://osysharp.com/reference/) — the language, the runtime and every kit
+- [`llms-full.txt`](https://osysharp.com/llms-full.txt) — the whole reference and specification as one Markdown file, for a coding agent
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).
