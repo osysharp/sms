@@ -44,3 +44,73 @@ model of its own is not handed a second principal — and this is the few lines 
 ## Its tests
 
 Its tests stub `Http.Post` and assert the form body that reaches 46elks' API; none sends a real message.
+
+## Examples
+
+Taken from this package's own tests, which compile and run on every release.
+
+```osy
+using Osysharp.Http;
+using Osysharp.Identity;
+using Osysharp.Sms;
+
+[Test(Desk)]
+void a_message_reaches_46elks_as_a_form_and_answers_its_id() {
+  runas (Ada) {
+    var sms = Text("+46701234567", "Your code is 123456.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var sent = OutgoingSms.Single(m => m.Text == "Your code is 123456.");
+    Assert.Equal(SmsStatus.Sent, sent.Status);
+    Assert.Equal("46elks", sent.SentWith);
+    Assert.Equal("s-elks-1", sent.ProviderId);
+    var wire = WireLog.Single(w => w.Body.Contains("123456"));
+    Assert.Equal("https://api.46elks.com/a1/SMS", wire.Url);
+    // The `+` is escaped: a bare `+` in a form body is a space, and 46elks would read no country code.
+    Assert.Contains("to=%2B46701234567", wire.Body);
+    Assert.Contains("from=Acme", wire.Body);
+    Assert.Contains("message=Your%20code%20is%20123456.", wire.Body);
+    Assert.Equal("Basic " + Convert.ToBase64String(Text.ToBytes("u_test:p_test")), wire.Auth);
+  }
+}
+```
+
+From [`tests/elks.test.osy`](tests/elks.test.osy).
+
+```osy
+using Osysharp.Http;
+using Osysharp.Identity;
+using Osysharp.Sms;
+
+[Test(Desk)]
+void with_no_password_the_message_is_held_and_says_which_credential() {
+  ElksPassword.Stub(() => "");
+  runas (Ada) {
+    var sms = Text("+46701234567", "Held.");
+    UnitOfWork.Commit();
+    Workflow.Settle(sms);
+  }
+  runas (Ada) {
+    var held = OutgoingSms.Single(m => m.Text == "Held.");
+    Assert.Equal(SmsStatus.Held, held.Status);
+    // The adapter's own NotReadyReason, not the contract's default.
+    Assert.Equal("46elks has no API password — set `Password` on ElksSmsSender in app.Sms.", held.Problem);
+    Assert.False(WireLog.Any(w => w.Body.Contains("Held.")));
+  }
+}
+```
+
+From [`tests/elks.test.osy`](tests/elks.test.osy).
+
+## Learn more
+
+- [The Osysharp.Sms.FortySixElks reference](https://osysharp.com/reference/ui/sms-kit/)
+- [Osysharp.Sms.FortySixElks in the package catalogue](https://osysharp.com/packages/#osysharp-sms-fortysixelks)
+- [The Osy# reference](https://osysharp.com/reference/) — the language, the runtime and every kit
+- [`llms-full.txt`](https://osysharp.com/llms-full.txt) — the whole reference and specification as one Markdown file, for a coding agent
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).
