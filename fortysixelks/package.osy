@@ -6,9 +6,10 @@
 //   principal and refused. Elks' own API is untouched; this is the few lines that adapt it — the shape
 //   `Osysharp.Mail.Resend` has for mail.
 package Osysharp.Sms.FortySixElks {
-  version "0.2.1";
-  minPlatform "0.19.0";
+  version "0.3.0";
+  minPlatform "0.25.0";
   summary     "46elks as a sender for Osysharp.Sms — Nordic alphanumeric senders, EU-only handling, and a dry run for staging.";
+  layout "Osysharp.Sms.FortySixElks" members;
   model "model/*.osy";
   use Osysharp.Sms@0;
   // Osysharp.FortySixElks reaches api.46elks.com. A package cannot grant that; the APP that uses this kit grants it,
